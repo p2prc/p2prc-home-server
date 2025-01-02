@@ -1,0 +1,1 @@
+lsof -i tcp:8084 | awk 'NR!=1 {print $2}' | xargs kill

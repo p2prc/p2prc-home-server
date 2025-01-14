@@ -9,10 +9,22 @@ import subprocess
 import uuid
 import dacite
 import os
+import sqlalchemy
+import dataclasses
+from typing import Union
+import schedule
+import threading
+import requests
 
 p2prc = ctypes.CDLL("SharedObjects/p2prc.so")
 
 p2prc.Init("")
+
+# Start running schedule
+schedule.run_pending()
+
+# # Create Sqlite database to track processes 
+# engine=sqlalchemy.create_engine(f'sqlite:///homeserver.db')
 
 # Global variable 
 # A global variable will be populated on runtime.
@@ -108,22 +120,129 @@ class Process:
     Status: bool
     DomainName: str
 
+@dataclass
+class Processes:
+    Processes: List[Process]
+
+PublicProcesses: Union[Processes, None] = None
+
 # Initial defined functions 
 # Exposed functions 
 def SpinProcess(process: Process):
     # Starts P2PRC process 
     os.system(process.CommandToRunScript)
+    
+    # concats to the public exposed IP address + The Node information exposed P2PRC
+    # server port. 
+    ServerAddress = process.NodeInfo.IPV4 + ":" + process.NodeInfo.ServerPort
 
-    process.ExternalAddress = P2PRCMapPort(port=process.InternalPortNo,domainname=process.DomainName,serveraddress=process.NodeInfo.ip_address.IPV4 + ":" + process.NodeInfo.ip_address.ServerPort)
+    process.ExternalAddress = P2PRCMapPort(port=process.InternalPortNo,
+                                           domainname=process.DomainName,
+                                           serveraddress=ServerAddress)
     process.ID = str(uuid.uuid4())
     process.Status = True
+
+    # Save the process to memory
+    AddProcessToMemory(process)
+    
+    # Save to disk 
+    SaveProcess()
+
     return process
 
 # Kill process based on the process provided
 def KillProcess(process: Process): 
     os.system(process.CommandToKillScript)
     process.Status = False
+
+    # Remove the process from memory
+    PublicProcesses.Processes.remove(process)
+
+    # Remove from disk
+    SaveProcess()
+
     return process
+
+# Saves the list of processes provided as a JSON file
+def SaveProcess():
+    global PublicProcesses 
+    with open('data.json', 'w+') as f:
+        json.dump(dataclasses.asdict(PublicProcesses), f, indent=4)
+
+# Read saves processes 
+def ReadSavedProcesses():
+    try:
+        global PublicProcesses
+        with open('data.json', 'r') as file:
+            data = json.load(file) 
+        PublicProcesses = dacite.from_dict(Processes,data)
+    except Exception as e:
+        PublicProcesses = None
+
+# Gets called when the python file is called
+ReadSavedProcesses()
+
+# List processes
+def ListProcess():
+    global PublicProcesses
+    return PublicProcesses
+
+# Adds the process dataclass the to
+# the global variable PublicProcess.
+def AddProcessToMemory(process: Process):
+    global PublicProcesses
+    if PublicProcesses == None:
+        PublicProcesses = Processes(Processes=[process])
+        # PublicProcesses.Processes.append(process)
+    else: 
+        PublicProcesses.Processes.append(process)
+
+# Tracks processes in the background and removes them
+# if not able to ping to the process
+def BackgroundTrackProcess():
+    global PublicProcesses 
+    while 1:
+        print("starting background process")
+        for i in PublicProcesses.Processes:
+            if not check_ping(i.ExternalAddress):
+                i.Status = False
+                SaveProcess()
+            time.sleep(3)
+
+# Run the track processes every 3 seconds 
+# schedule.every(3).seconds.do(BackgroundTrackProcess)
+
+Background_track_thread = threading.Thread(target=BackgroundTrackProcess, name="Track Process")
+# Kills the tread of system exit
+Background_track_thread.setDaemon(True)
+Background_track_thread.start()
+            
+
+def check_ping(host):
+    try:
+        page = requests.get('http://' + host)
+        if page.status_code == 200:
+            return True
+        return False
+    except:
+        return False
+
+# source: https://stackoverflow.com/questions/26468640/python-function-to-test-ping
+# def check_ping(host: str):
+#     response = os.system("ping -c 1 " + host)
+#     if response == 0:
+#         pingstatus = True
+#     else:
+#         pingstatus = False
+#     return pingstatus
+
+
+
+
+    
+
+
+   
     
 
 # def ProcessInformation():

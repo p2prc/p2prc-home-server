@@ -1,3 +1,4 @@
 p2prc-virtualenv/
 SharedObjects/
 __pycache__/
+data.json

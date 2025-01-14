@@ -9,7 +9,7 @@ if __name__ == "__main__":
        ID="",
        TaskName="TestServer",
        InternalPortNo="8084",
-       NodeInfo=IPAddress(P2PRCNodes.ip_address[2]),
+       NodeInfo=P2PRCNodes.ip_address[2],
        CommandToRunScript="sh SamplePythonTestServer/server.sh &",
        CommandToKillScript="sh SamplePythonTestServer/killserver.sh",
        DomainName="",
@@ -23,10 +23,9 @@ if __name__ == "__main__":
     sample_process = SpinProcess(sample_process)
 
     print("------------ Process Public address -------------")
-    
-    # Prints status of the current process 
-    print(sample_process.ExternalAddress)
 
+    print(ListProcess())
+   
     print("------------ Process kept waiting for 20 seconds -------------")
 
     # Runs the process for 20 seconds
@@ -35,9 +34,6 @@ if __name__ == "__main__":
     print("------------ Process getting killed -------------")
 
     # Kills the process 
-    KillProcess(sample_process)
+   #  KillProcess(sample_process)
 
     print("------------ Process current process -------------")
-
-    # Prints process status 
-    print(sample_process.Status)
